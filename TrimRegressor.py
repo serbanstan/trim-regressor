@@ -8,7 +8,7 @@ import numpy
 import typing
 
 # Custom import commands if any
-from sklearn.linear_model.logistic import LogisticRegression
+from sklearn.linear_model.coordinate_descent import Lasso
 
 
 from d3m.container.numpy import ndarray as d3m_ndarray
@@ -27,9 +27,10 @@ Outputs = d3m_dataframe
 
 class Params(params.Params):
     coef_: Optional[ndarray]
-    intercept_: Optional[ndarray]
-    n_iter_: Optional[ndarray]
-    classes_: Optional[ndarray]
+    intercept_: Optional[Union[float, ndarray]]
+    n_iter_: Optional[int]
+    dual_gap_: Optional[float]
+    l1_ratio: Optional[float]
     target_names_: Optional[Sequence[Any]]
     training_indices_: Optional[Sequence[int]]
     target_column_indices_: Optional[Sequence[int]]
@@ -38,94 +39,74 @@ class Params(params.Params):
 
 
 class Hyperparams(hyperparams.Hyperparams):
-    penalty = hyperparams.Enumeration[str](
-        values=['l1', 'l2'],
-        default='l2',
-        description='Used to specify the norm used in the penalization. The \'newton-cg\', \'sag\' and \'lbfgs\' solvers support only l2 penalties.',
+    trim_perc = hyperparams.Bounded[float](
+        default=.5,
+        lower=0,
+        upper=1,
+        description='The percentage of singular values to be kept unchanged',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
-    dual = hyperparams.UniformBool(
-        default=False,
-        description='Dual or primal formulation. Dual formulation is only implemented for l2 penalty with liblinear solver. Prefer dual=False when n_samples > n_features.',
+    alpha = hyperparams.Bounded[float](
+        default=1,
+        lower=0,
+        upper=None,
+        description='Constant that multiplies the L1 term. Defaults to 1.0. ``alpha = 0`` is equivalent to an ordinary least square, solved by the :class:`LinearRegression` object. For numerical reasons, using ``alpha = 0`` with the ``Lasso`` object is not advised. Given this, you should use the :class:`LinearRegression` object.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
     fit_intercept = hyperparams.UniformBool(
         default=True,
-        description='Specifies if a constant (a.k.a. bias or intercept) should be added to the decision function.',
+        description='whether to calculate the intercept for this model. If set to false, no intercept will be used in calculations (e.g. data is expected to be already centered).',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
-    intercept_scaling = hyperparams.Hyperparameter[float](
-        default=1,
-        description='Useful only when the solver \'liblinear\' is used and self.fit_intercept is set to True. In this case, x becomes [x, self.intercept_scaling], i.e. a "synthetic" feature with constant value equal to intercept_scaling is appended to the instance vector. The intercept becomes ``intercept_scaling * synthetic_feature_weight``.  Note! the synthetic feature weight is subject to l1/l2 regularization as all other features. To lessen the effect of regularization on synthetic feature weight (and therefore on the intercept) intercept_scaling has to be increased.',
+    normalize = hyperparams.UniformBool(
+        default=False,
+        description='This parameter is ignored when ``fit_intercept`` is set to False. If True, the regressors X will be normalized before regression by subtracting the mean and dividing by the l2-norm. If you wish to standardize, please use :class:`sklearn.preprocessing.StandardScaler` before calling ``fit`` on an estimator with ``normalize=False``.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
-    class_weight = hyperparams.Union(
+    precompute = hyperparams.Union(
         configuration=OrderedDict({
-            'str': hyperparams.Constant(
-                default='balanced',
+            'bool': hyperparams.UniformBool(
+                default=False,
                 semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
             ),
-            'none': hyperparams.Hyperparameter[None](
-                default=None,
+            'auto': hyperparams.Constant(
+                default='auto',
                 semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
             )
         }),
-        default='none',
-        description='Weights associated with classes in the form ``{class_label: weight}``. If not given, all classes are supposed to have weight one.  The "balanced" mode uses the values of y to automatically adjust weights inversely proportional to class frequencies in the input data as ``n_samples / (n_classes * np.bincount(y))``.  Note that these weights will be multiplied with sample_weight (passed through the fit method) if sample_weight is specified.  .. versionadded:: 0.17 *class_weight=\'balanced\'* instead of deprecated *class_weight=\'auto\'*.',
+        default='bool',
+        description='Whether to use a precomputed Gram matrix to speed up calculations. If set to ``\'auto\'`` let us decide. The Gram matrix can also be passed as argument. For sparse input this option is always ``True`` to preserve sparsity.  copy_X : boolean, optional, default True If ``True``, X will be copied; else, it may be overwritten.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
     max_iter = hyperparams.Bounded[int](
-        default=100,
+        default=1000,
         lower=0,
         upper=None,
-        description='Useful only for the newton-cg, sag and lbfgs solvers. Maximum number of iterations taken for the solvers to converge.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    solver = hyperparams.Enumeration[str](
-        values=['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'],
-        default='liblinear',
-        description='Algorithm to use in the optimization problem.  - For small datasets, \'liblinear\' is a good choice, whereas \'sag\' is faster for large ones. - For multiclass problems, only \'newton-cg\', \'sag\' and \'lbfgs\' handle multinomial loss; \'liblinear\' is limited to one-versus-rest schemes. - \'newton-cg\', \'lbfgs\' and \'sag\' only handle L2 penalty.  Note that \'sag\' fast convergence is only guaranteed on features with approximately the same scale. You can preprocess the data with a scaler from sklearn.preprocessing.  .. versionadded:: 0.17 Stochastic Average Gradient descent solver.',
+        description='The maximum number of iterations',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
     tol = hyperparams.Bounded[float](
         default=0.0001,
         lower=0,
         upper=None,
-        description='Tolerance for stopping criteria.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    C = hyperparams.Hyperparameter[float](
-        default=1.0,
-        description='Inverse of regularization strength; must be a positive float. Like in support vector machines, smaller values specify stronger regularization.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    multi_class = hyperparams.Enumeration[str](
-        values=['ovr', 'multinomial'],
-        default='ovr',
-        description='Multiclass option can be either \'ovr\' or \'multinomial\'. If the option chosen is \'ovr\', then a binary problem is fit for each label. Else the loss minimised is the multinomial loss fit across the entire probability distribution. Works only for the \'newton-cg\', \'sag\' and \'lbfgs\' solver.  .. versionadded:: 0.18 Stochastic Average Gradient descent solver for \'multinomial\' case.',
+        description='The tolerance for the optimization: if the updates are smaller than ``tol``, the optimization code checks the dual gap for optimality and continues until it is smaller than ``tol``.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
     warm_start = hyperparams.UniformBool(
         default=False,
-        description='When set to True, reuse the solution of the previous call to fit as initialization, otherwise, just erase the previous solution. Useless for liblinear solver.  .. versionadded:: 0.17 *warm_start* to support *lbfgs*, *newton-cg*, *sag* solvers.',
+        description='When set to True, reuse the solution of the previous call to fit as initialization, otherwise, just erase the previous solution.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
-    n_jobs = hyperparams.Union(
-        configuration=OrderedDict({
-            'limit': hyperparams.Bounded[int](
-                default=1,
-                lower=1,
-                upper=None,
-                semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
-            ),
-            'all_cores': hyperparams.Constant(
-                default=-1,
-                semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
-            )
-        }),
-        default='limit',
-        description='Number of CPU cores used during the cross-validation loop. If given a value of -1, all cores are used.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/ResourcesUseParameter']
+    positive = hyperparams.UniformBool(
+        default=False,
+        description='When set to ``True``, forces the coefficients to be positive.',
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    )
+    selection = hyperparams.Enumeration[str](
+        default='cyclic',
+        values=['cyclic', 'random'],
+        description='If set to \'random\', a random coefficient is updated every iteration rather than looping over features sequentially by default. This (setting to \'random\') often leads to significantly faster convergence especially when tol is higher than 1e-4.',
+        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
     
     use_input_columns = hyperparams.Set(
@@ -171,61 +152,71 @@ class Hyperparams(hyperparams.Hyperparams):
 
 
 
-class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams],
-                          ProbabilisticCompositionalityMixin[Inputs, Outputs, Params, Hyperparams]):
+class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hyperparams]):
     """
-    Primitive wrapping for sklearn LogisticRegression
-    `sklearn documentation <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html>`_
-    
+    Primitive using Trim in combination with Lasso. Code based on JPL's implementation of Lasso. 
+    Trim deconfounding paper: https://arxiv.org/pdf/1811.05352.pdf
+    `sklearn documentation <https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html>`_
     """
     
-    __author__ = "JPL MARVIN"
+    __author__ = "ISI"
     metadata = metadata_base.PrimitiveMetadata({ 
-         "algorithm_types": [metadata_base.PrimitiveAlgorithmType.LOGISTIC_REGRESSION, ],
-         "name": "sklearn.linear_model.logistic.LogisticRegression",
-         "primitive_family": metadata_base.PrimitiveFamily.CLASSIFICATION,
-         "python_path": "d3m.primitives.classification.logistic_regression.SKlearn",
-         "source": {'name': 'JPL', 'contact': 'mailto:shah@jpl.nasa.gov', 'uris': ['https://gitlab.com/datadrivendiscovery/sklearn-wrap/issues', 'https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html']},
-         "version": "v2019.2.27",
-         "id": "b9c81b40-8ed1-3b23-80cf-0d6fe6863962",
-         'installation': [
-                        # TODO : Will update based on https://gitlab.com/datadrivendiscovery/d3m/issues/137
-                        #{
-                        #    "type": "PIP",
-                        #    "package_uri": "git+https://gitlab.com/datadrivendiscovery/common-primitives.git@26419dde2f660f901066c896a972ae4c438ee236#egg=common_primitives"
-                        #},
-                        {'type': metadata_base.PrimitiveInstallationType.PIP,
-                           'package_uri': 'git+https://gitlab.com/datadrivendiscovery/sklearn-wrap.git@{git_commit}#egg=sklearn_wrap'.format(
-                               git_commit=utils.current_git_commit(os.path.dirname(__file__)),
-                            ),
-                           }]
+        # TODO: correct this
+
+        "id": "de250522-5edb-4697-8945-56d04baba0e4",
+        "version": "1.0.0",
+        "name": "TrimRegressor",
+        "description": "Lasso enhanced by spectral deconfounding",
+        "python_path": "d3m.primitives.regression.TrimRegressor",
+        "source": {
+            "name": "ISI",
+            "contact": "mailto:sstan@usc.edu",
+            "uris": [ "https://github.com/serbanstan/trim-regressor" ]
+        },
+        "installation": [ cfg_.INSTALLATION ]
+
+         # "algorithm_types": [metadata_base.PrimitiveAlgorithmType.LASSO, ],
+         # "name": "sklearn.linear_model.coordinate_descent.Lasso",
+         # "primitive_family": metadata_base.PrimitiveFamily.REGRESSION,
+         # "python_path": "d3m.primitives.regression.lasso.SKlearn",
+         # "source": {'name': 'JPL', 'contact': 'mailto:shah@jpl.nasa.gov', 'uris': ['https://gitlab.com/datadrivendiscovery/sklearn-wrap/issues', 'https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Lasso.html']},
+         # "version": "v2019.2.27",
+         # "id": "a7100c7d-8d8e-3f2a-a0ee-b4380383ed6c",
+         # 'installation': [
+         #                # TODO : Will update based on https://gitlab.com/datadrivendiscovery/d3m/issues/137
+         #                #{
+         #                #    "type": "PIP",
+         #                #    "package_uri": "git+https://gitlab.com/datadrivendiscovery/common-primitives.git@26419dde2f660f901066c896a972ae4c438ee236#egg=common_primitives"
+         #                #},
+         #                {'type': metadata_base.PrimitiveInstallationType.PIP,
+         #                   'package_uri': 'git+https://gitlab.com/datadrivendiscovery/sklearn-wrap.git@{git_commit}#egg=sklearn_wrap'.format(
+         #                       git_commit=utils.current_git_commit(os.path.dirname(__file__)),
+         #                    ),
+         #                   }]
     })
 
     def __init__(self, *,
                  hyperparams: Hyperparams,
                  random_seed: int = 0,
-                 docker_containers: Dict[str, DockerContainer] = None,
-                 _verbose: int = 0) -> None:
+                 docker_containers: Dict[str, DockerContainer] = None) -> None:
 
         super().__init__(hyperparams=hyperparams, random_seed=random_seed, docker_containers=docker_containers)
         
         # False
-        self._clf = LogisticRegression(
-              penalty=self.hyperparams['penalty'],
-              dual=self.hyperparams['dual'],
+        self._clf = Lasso(
+              alpha=self.hyperparams['alpha'],
               fit_intercept=self.hyperparams['fit_intercept'],
-              intercept_scaling=self.hyperparams['intercept_scaling'],
-              class_weight=self.hyperparams['class_weight'],
+              normalize=self.hyperparams['normalize'],
+              precompute=self.hyperparams['precompute'],
               max_iter=self.hyperparams['max_iter'],
-              solver=self.hyperparams['solver'],
               tol=self.hyperparams['tol'],
-              C=self.hyperparams['C'],
-              multi_class=self.hyperparams['multi_class'],
               warm_start=self.hyperparams['warm_start'],
-              n_jobs=self.hyperparams['n_jobs'],
+              positive=self.hyperparams['positive'],
+              selection=self.hyperparams['selection'],
               random_state=self.random_seed,
-              verbose=_verbose
         )
+        self._F = None
+        self._F_inv = None
         self._training_inputs = None
         self._training_outputs = None
         self._target_names = None
@@ -238,6 +229,10 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
         self._training_inputs, self._training_indices = self._get_columns_to_fit(inputs, self.hyperparams)
         self._training_outputs, self._target_names, self._target_column_indices = self._get_targets(outputs, self.hyperparams)
         self._fitted = False
+
+    # TODO: make this complete
+    def compute_F(X_data):
+        return np.eye(X_data.shape[0])
         
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         if self._fitted:
@@ -252,7 +247,12 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
         if len(shape) == 2 and shape[1] == 1:
             sk_training_output = numpy.ravel(sk_training_output)
 
-        self._clf.fit(self._training_inputs, sk_training_output)
+        self._F, self._F_inv = compute_F(self._training_inputs)
+
+        new_inputs = np.dot(self._F, self._training_inputs)
+        new_outputs = np.dot(self._F, sk_training_output)
+
+        self._clf.fit(new_inputs, new_outputs)
         self._fitted = True
 
         return CallResult(None)
@@ -261,7 +261,11 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
         sk_inputs = inputs
         if self.hyperparams['use_semantic_types']:
             sk_inputs = inputs.iloc[:, self._training_indices]
-        sk_output = self._clf.predict(sk_inputs)
+
+        new_inputs = np.dot(self._F, sk_inputs)
+        trim_output = self._clf.predict(new_inputs)
+        sk_output = np.dot(self._F_inv, trim_output)
+
         if sparse.issparse(sk_output):
             sk_output = sk_output.toarray()
         output = self._wrap_predictions(inputs, sk_output)
@@ -279,7 +283,8 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
                 coef_=None,
                 intercept_=None,
                 n_iter_=None,
-                classes_=None,
+                dual_gap_=None,
+                l1_ratio=None,
                 training_indices_=self._training_indices,
                 target_names_=self._target_names,
                 target_column_indices_=self._target_column_indices,
@@ -290,7 +295,8 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
             coef_=getattr(self._clf, 'coef_', None),
             intercept_=getattr(self._clf, 'intercept_', None),
             n_iter_=getattr(self._clf, 'n_iter_', None),
-            classes_=getattr(self._clf, 'classes_', None),
+            dual_gap_=getattr(self._clf, 'dual_gap_', None),
+            l1_ratio=getattr(self._clf, 'l1_ratio', None),
             training_indices_=self._training_indices,
             target_names_=self._target_names,
             target_columns_metadata_=self._target_columns_metadata,
@@ -301,7 +307,8 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
         self._clf.coef_ = params['coef_']
         self._clf.intercept_ = params['intercept_']
         self._clf.n_iter_ = params['n_iter_']
-        self._clf.classes_ = params['classes_']
+        self._clf.dual_gap_ = params['dual_gap_']
+        self._clf.l1_ratio = params['l1_ratio']
         self._training_indices = params['training_indices_']
         self._target_names = params['target_names_']
         self._target_column_indices = params['target_column_indices_']
@@ -314,16 +321,10 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
             self._fitted = True
         if params['n_iter_'] is not None:
             self._fitted = True
-        if params['classes_'] is not None:
+        if params['dual_gap_'] is not None:
             self._fitted = True
-    def log_likelihoods(self, *,
-                    outputs: Outputs,
-                    inputs: Inputs,
-                    timeout: float = None,
-                    iterations: int = None) -> CallResult[Sequence[float]]:
-        inputs = inputs.values  # Get ndarray
-        outputs = outputs.values
-        return CallResult(self._clf.predict_log_proba(inputs)[:, outputs])
+        if params['l1_ratio'] is not None:
+            self._fitted = True
     
 
 
@@ -458,4 +459,4 @@ class SKLogisticRegression(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Param
         return target_columns_metadata
 
 
-SKLogisticRegression.__doc__ = LogisticRegression.__doc__
+# TrimRegressor.__doc__ = Lasso.__doc__

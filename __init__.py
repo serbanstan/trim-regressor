@@ -1,2 +1,2 @@
-__author__ = 'serban stan @ ISI'
-__version__ = 'v2019.2.27'
+__author__ = 'ISI'
+__version__ = '1.0.0'
