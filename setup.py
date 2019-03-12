@@ -30,7 +30,7 @@ setup(
     url='https://github.com/serbanstan/trim-regressor',
     entry_points = {
         'd3m.primitives': [
-            'regression.Trim = TrimRegressor:TrimRegressor',
+            'regression.TrimRegressor = TrimRegressor:TrimRegressor',
         ],
     },
 )

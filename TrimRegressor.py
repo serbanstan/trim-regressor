@@ -7,6 +7,9 @@ import sklearn
 import numpy
 import typing
 
+# local config
+import config
+
 # Custom import commands if any
 from sklearn.linear_model.coordinate_descent import Lasso
 
@@ -19,7 +22,6 @@ from d3m.primitive_interfaces.base import CallResult, DockerContainer
 import common_primitives.utils as common_utils
 from d3m.primitive_interfaces.supervised_learning import SupervisedLearnerPrimitiveBase
 from d3m.primitive_interfaces.base import ProbabilisticCompositionalityMixin
-
 
 Inputs = d3m_dataframe
 Outputs = d3m_dataframe
@@ -173,7 +175,9 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
             "contact": "mailto:sstan@usc.edu",
             "uris": [ "https://github.com/serbanstan/trim-regressor" ]
         },
-        "installation": [ cfg_.INSTALLATION ]
+        "algorithm_types": ["REGULARIZED_LEAST_SQUARES", 'FEATURE_SCALING'],
+        "primitive_family": "FEATURE_CONSTRUCTION",
+        "installation": [ config.INSTALLATION ]
 
          # "algorithm_types": [metadata_base.PrimitiveAlgorithmType.LASSO, ],
          # "name": "sklearn.linear_model.coordinate_descent.Lasso",
@@ -215,8 +219,8 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
               selection=self.hyperparams['selection'],
               random_state=self.random_seed,
         )
-        self._F = None
-        self._F_inv = None
+        # self._F = None
+        # self._F_inv = None
         self._training_inputs = None
         self._training_outputs = None
         self._target_names = None
@@ -231,8 +235,29 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         self._fitted = False
 
     # TODO: make this complete
-    def compute_F(X_data):
-        return np.eye(X_data.shape[0])
+    def _compute_F(self, X_data):
+        X = numpy.array(X_data)
+
+        U,d,V = numpy.linalg.svd(X)
+
+        r = len(d)
+
+        tau = sorted(d)[int(r * self.hyperparams['trim_perc'])]
+
+        d_hat = numpy.array([min(x, tau)/x for x in d])
+
+        D_hat = numpy.zeros(U.shape)
+        D_hat[:r, :r] = numpy.diag(d_hat)
+
+        D_hat_inv = numpy.zeros(U.shape)
+        D_hat_inv[:r, :r] = numpy.diag(1 / d_hat)
+
+        F = numpy.dot(U, numpy.dot(D_hat, U.T))
+        F_inv = numpy.dot(U, numpy.dot(D_hat_inv, U.T))
+
+        return F, F_inv
+
+        # return (numpy.eye(X_data.shape[0]), numpy.eye(X_data.shape[0]))
         
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         if self._fitted:
@@ -247,10 +272,12 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         if len(shape) == 2 and shape[1] == 1:
             sk_training_output = numpy.ravel(sk_training_output)
 
-        self._F, self._F_inv = compute_F(self._training_inputs)
+        # print(self._training_inputs)
 
-        new_inputs = np.dot(self._F, self._training_inputs)
-        new_outputs = np.dot(self._F, sk_training_output)
+        F, _ = self._compute_F(self._training_inputs)
+
+        new_inputs = numpy.dot(F, self._training_inputs)
+        new_outputs = numpy.dot(F, sk_training_output)
 
         self._clf.fit(new_inputs, new_outputs)
         self._fitted = True
@@ -262,9 +289,11 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         if self.hyperparams['use_semantic_types']:
             sk_inputs = inputs.iloc[:, self._training_indices]
 
-        new_inputs = np.dot(self._F, sk_inputs)
+        F, F_inv = self._compute_F(sk_inputs)
+
+        new_inputs = numpy.dot(F, sk_inputs)
         trim_output = self._clf.predict(new_inputs)
-        sk_output = np.dot(self._F_inv, trim_output)
+        sk_output = numpy.dot(F_inv, trim_output)
 
         if sparse.issparse(sk_output):
             sk_output = sk_output.toarray()
