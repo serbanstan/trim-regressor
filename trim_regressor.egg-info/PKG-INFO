@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: trim-regressor
+Version: 1.0.0
+Summary: A de-confounding primitive using TRIM
+Home-page: https://github.com/serbanstan/trim-regressor
+Author: ISI
+Author-email: UNKNOWN
+License: AGPL-3.0
+Description: UNKNOWN
+Platform: UNKNOWN

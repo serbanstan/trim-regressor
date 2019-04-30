@@ -1,3 +1,9 @@
+'''
+    TRIM deconfounding algorithm built on top of sklearn-wrap's lasso regression. 
+    Link to TRIM paper https://arxiv.org/pdf/1811.05352.pdf
+'''
+
+
 from typing import Any, Callable, List, Dict, Union, Optional, Sequence, Tuple
 from numpy import ndarray
 from collections import OrderedDict
@@ -55,61 +61,61 @@ class Hyperparams(hyperparams.Hyperparams):
         description='Constant that multiplies the L1 term. Defaults to 1.0. ``alpha = 0`` is equivalent to an ordinary least square, solved by the :class:`LinearRegression` object. For numerical reasons, using ``alpha = 0`` with the ``Lasso`` object is not advised. Given this, you should use the :class:`LinearRegression` object.',
         semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
     )
-    fit_intercept = hyperparams.UniformBool(
-        default=True,
-        description='whether to calculate the intercept for this model. If set to false, no intercept will be used in calculations (e.g. data is expected to be already centered).',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    normalize = hyperparams.UniformBool(
-        default=False,
-        description='This parameter is ignored when ``fit_intercept`` is set to False. If True, the regressors X will be normalized before regression by subtracting the mean and dividing by the l2-norm. If you wish to standardize, please use :class:`sklearn.preprocessing.StandardScaler` before calling ``fit`` on an estimator with ``normalize=False``.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    precompute = hyperparams.Union(
-        configuration=OrderedDict({
-            'bool': hyperparams.UniformBool(
-                default=False,
-                semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
-            ),
-            'auto': hyperparams.Constant(
-                default='auto',
-                semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
-            )
-        }),
-        default='bool',
-        description='Whether to use a precomputed Gram matrix to speed up calculations. If set to ``\'auto\'`` let us decide. The Gram matrix can also be passed as argument. For sparse input this option is always ``True`` to preserve sparsity.  copy_X : boolean, optional, default True If ``True``, X will be copied; else, it may be overwritten.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    max_iter = hyperparams.Bounded[int](
-        default=1000,
-        lower=0,
-        upper=None,
-        description='The maximum number of iterations',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    tol = hyperparams.Bounded[float](
-        default=0.0001,
-        lower=0,
-        upper=None,
-        description='The tolerance for the optimization: if the updates are smaller than ``tol``, the optimization code checks the dual gap for optimality and continues until it is smaller than ``tol``.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    warm_start = hyperparams.UniformBool(
-        default=False,
-        description='When set to True, reuse the solution of the previous call to fit as initialization, otherwise, just erase the previous solution.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    positive = hyperparams.UniformBool(
-        default=False,
-        description='When set to ``True``, forces the coefficients to be positive.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
-    selection = hyperparams.Enumeration[str](
-        default='cyclic',
-        values=['cyclic', 'random'],
-        description='If set to \'random\', a random coefficient is updated every iteration rather than looping over features sequentially by default. This (setting to \'random\') often leads to significantly faster convergence especially when tol is higher than 1e-4.',
-        semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
-    )
+    # fit_intercept = hyperparams.UniformBool(
+    #     default=True,
+    #     description='whether to calculate the intercept for this model. If set to false, no intercept will be used in calculations (e.g. data is expected to be already centered).',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # normalize = hyperparams.UniformBool(
+    #     default=False,
+    #     description='This parameter is ignored when ``fit_intercept`` is set to False. If True, the regressors X will be normalized before regression by subtracting the mean and dividing by the l2-norm. If you wish to standardize, please use :class:`sklearn.preprocessing.StandardScaler` before calling ``fit`` on an estimator with ``normalize=False``.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # precompute = hyperparams.Union(
+    #     configuration=OrderedDict({
+    #         'bool': hyperparams.UniformBool(
+    #             default=False,
+    #             semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
+    #         ),
+    #         'auto': hyperparams.Constant(
+    #             default='auto',
+    #             semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter'],
+    #         )
+    #     }),
+    #     default='bool',
+    #     description='Whether to use a precomputed Gram matrix to speed up calculations. If set to ``\'auto\'`` let us decide. The Gram matrix can also be passed as argument. For sparse input this option is always ``True`` to preserve sparsity.  copy_X : boolean, optional, default True If ``True``, X will be copied; else, it may be overwritten.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # max_iter = hyperparams.Bounded[int](
+    #     default=1000,
+    #     lower=0,
+    #     upper=None,
+    #     description='The maximum number of iterations',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # tol = hyperparams.Bounded[float](
+    #     default=0.0001,
+    #     lower=0,
+    #     upper=None,
+    #     description='The tolerance for the optimization: if the updates are smaller than ``tol``, the optimization code checks the dual gap for optimality and continues until it is smaller than ``tol``.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # warm_start = hyperparams.UniformBool(
+    #     default=False,
+    #     description='When set to True, reuse the solution of the previous call to fit as initialization, otherwise, just erase the previous solution.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # positive = hyperparams.UniformBool(
+    #     default=False,
+    #     description='When set to ``True``, forces the coefficients to be positive.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
+    # selection = hyperparams.Enumeration[str](
+    #     default='cyclic',
+    #     values=['cyclic', 'random'],
+    #     description='If set to \'random\', a random coefficient is updated every iteration rather than looping over features sequentially by default. This (setting to \'random\') often leads to significantly faster convergence especially when tol is higher than 1e-4.',
+    #     semantic_types=['https://metadata.datadrivendiscovery.org/types/TuningParameter']
+    # )
     
     use_input_columns = hyperparams.Set(
         elements=hyperparams.Hyperparameter[int](-1),
@@ -169,7 +175,7 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         "version": "1.0.0",
         "name": "TrimRegressor",
         "description": "Lasso enhanced by spectral deconfounding",
-        "python_path": "d3m.primitives.regression.TrimRegressor",
+        "python_path": "d3m.primitives.regression.trim_regressor.TrimRegressor",
         "source": {
             "name": "ISI",
             "contact": "mailto:sstan@usc.edu",
@@ -209,14 +215,14 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         # False
         self._clf = Lasso(
               alpha=self.hyperparams['alpha'],
-              fit_intercept=self.hyperparams['fit_intercept'],
-              normalize=self.hyperparams['normalize'],
-              precompute=self.hyperparams['precompute'],
-              max_iter=self.hyperparams['max_iter'],
-              tol=self.hyperparams['tol'],
-              warm_start=self.hyperparams['warm_start'],
-              positive=self.hyperparams['positive'],
-              selection=self.hyperparams['selection'],
+              # fit_intercept=self.hyperparams['fit_intercept'],
+              # normalize=self.hyperparams['normalize'],
+              # precompute=self.hyperparams['precompute'],
+              # max_iter=self.hyperparams['max_iter'],
+              # tol=self.hyperparams['tol'],
+              # warm_start=self.hyperparams['warm_start'],
+              # positive=self.hyperparams['positive'],
+              # selection=self.hyperparams['selection'],
               random_state=self.random_seed,
         )
         # self._F = None
@@ -234,7 +240,8 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         self._training_outputs, self._target_names, self._target_column_indices = self._get_targets(outputs, self.hyperparams)
         self._fitted = False
 
-    # TODO: make this complete
+    # Computes the linear transform F, so we work in the system (FX, FY) to recover the
+    # true betas. 
     def _compute_F(self, X_data):
         X = numpy.array(X_data)
 
@@ -256,8 +263,6 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         F_inv = numpy.dot(U, numpy.dot(D_hat_inv, U.T))
 
         return F, F_inv
-
-        # return (numpy.eye(X_data.shape[0]), numpy.eye(X_data.shape[0]))
         
     def fit(self, *, timeout: float = None, iterations: int = None) -> CallResult[None]:
         if self._fitted:
@@ -280,6 +285,11 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         new_outputs = numpy.dot(F, sk_training_output)
 
         self._clf.fit(new_inputs, new_outputs)
+        self._beta = self._clf.coef_
+
+        remainder = sk_training_output - np.dot(self._training_inputs, beta)
+        self._delta = self._clf.fit(self._training_inputs, remainder)
+
         self._fitted = True
 
         return CallResult(None)
@@ -289,11 +299,13 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         if self.hyperparams['use_semantic_types']:
             sk_inputs = inputs.iloc[:, self._training_indices]
 
-        F, F_inv = self._compute_F(sk_inputs)
+        sk_output = numpy.dot(sk_inputs, self._beta + self._delta)
 
-        new_inputs = numpy.dot(F, sk_inputs)
-        trim_output = self._clf.predict(new_inputs)
-        sk_output = numpy.dot(F_inv, trim_output)
+        # F, F_inv = self._compute_F(sk_inputs)
+
+        # new_inputs = numpy.dot(F, sk_inputs)
+        # trim_output = self._clf.predict(new_inputs)
+        # sk_output = numpy.dot(F_inv, trim_output)
 
         if sparse.issparse(sk_output):
             sk_output = sk_output.toarray()
@@ -309,11 +321,13 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
     def get_params(self) -> Params:
         if not self._fitted:
             return Params(
-                coef_=None,
-                intercept_=None,
-                n_iter_=None,
-                dual_gap_=None,
-                l1_ratio=None,
+                beta=None,
+                delta=None,
+                # coef_=None,
+                # intercept_=None,
+                # n_iter_=None,
+                # dual_gap_=None,
+                # l1_ratio=None,
                 training_indices_=self._training_indices,
                 target_names_=self._target_names,
                 target_column_indices_=self._target_column_indices,
@@ -321,11 +335,13 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
             )
 
         return Params(
-            coef_=getattr(self._clf, 'coef_', None),
-            intercept_=getattr(self._clf, 'intercept_', None),
-            n_iter_=getattr(self._clf, 'n_iter_', None),
-            dual_gap_=getattr(self._clf, 'dual_gap_', None),
-            l1_ratio=getattr(self._clf, 'l1_ratio', None),
+            beta=self._beta,
+            delta=self._delta,
+            # coef_=getattr(self._clf, 'coef_', None),
+            # intercept_=getattr(self._clf, 'intercept_', None),
+            # n_iter_=getattr(self._clf, 'n_iter_', None),
+            # dual_gap_=getattr(self._clf, 'dual_gap_', None),
+            # l1_ratio=getattr(self._clf, 'l1_ratio', None),
             training_indices_=self._training_indices,
             target_names_=self._target_names,
             target_columns_metadata_=self._target_columns_metadata,
@@ -333,11 +349,13 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         )
 
     def set_params(self, *, params: Params) -> None:
-        self._clf.coef_ = params['coef_']
-        self._clf.intercept_ = params['intercept_']
-        self._clf.n_iter_ = params['n_iter_']
-        self._clf.dual_gap_ = params['dual_gap_']
-        self._clf.l1_ratio = params['l1_ratio']
+        self._beta = params['beta'],
+        self._delta = params['delta'],
+        # self._clf.coef_ = params['coef_']
+        # self._clf.intercept_ = params['intercept_']
+        # self._clf.n_iter_ = params['n_iter_']
+        # self._clf.dual_gap_ = params['dual_gap_']
+        # self._clf.l1_ratio = params['l1_ratio']
         self._training_indices = params['training_indices_']
         self._target_names = params['target_names_']
         self._target_column_indices = params['target_column_indices_']

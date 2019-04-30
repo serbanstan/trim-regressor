@@ -1,0 +1,8 @@
+README.md
+setup.py
+trim_regressor.egg-info/PKG-INFO
+trim_regressor.egg-info/SOURCES.txt
+trim_regressor.egg-info/dependency_links.txt
+trim_regressor.egg-info/entry_points.txt
+trim_regressor.egg-info/requires.txt
+trim_regressor.egg-info/top_level.txt

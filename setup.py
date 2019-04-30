@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-PACKAGE_NAME = 'trim-regressor'
+PACKAGE_NAME = 'trim_regressor'
 
 
 def read_package_variable(key):
@@ -27,7 +27,7 @@ setup(
         'd3m',
         'scikit-learn',
     ],
-    url='https://github.com/serbanstan/trim-regressor',
+    url='https://github.com/serbanstan/trim_regressor',
     entry_points = {
         'd3m.primitives': [
             'regression.TrimRegressor = TrimRegressor:TrimRegressor',
