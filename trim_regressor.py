@@ -1,6 +1,6 @@
 '''
     TRIM deconfounding algorithm built on top of sklearn-wrap's lasso regression. 
-    Link to TRIM paper https://arxiv.org/pdf/1811.05352.pdf
+    TRIM paper https://arxiv.org/pdf/1811.05352.pdf
 '''
 
 
@@ -182,7 +182,7 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
             "uris": [ "https://github.com/serbanstan/trim-regressor" ]
         },
         "algorithm_types": ["REGULARIZED_LEAST_SQUARES", 'FEATURE_SCALING'],
-        "primitive_family": "FEATURE_CONSTRUCTION",
+        "primitive_family": "REGRESSION",
         "installation": [ config.INSTALLATION ]
 
          # "algorithm_types": [metadata_base.PrimitiveAlgorithmType.LASSO, ],
@@ -271,24 +271,34 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         if self._training_inputs is None or self._training_outputs is None:
             raise ValueError("Missing training data.")
         self._target_columns_metadata = self._get_target_columns_metadata(self._training_outputs.metadata)
-        sk_training_output = self._training_outputs.values
 
-        shape = sk_training_output.shape
-        if len(shape) == 2 and shape[1] == 1:
-            sk_training_output = numpy.ravel(sk_training_output)
 
-        # print(self._training_inputs)
+        shape = self._training_outputs.shape
+        # if len(shape) == 2 and shape[1] == 1:
+        #     sk_training_output = numpy.ravel(sk_training_output)
 
-        F, _ = self._compute_F(self._training_inputs)
+        # Don't want to use the d3mIndex columnZ
+        X = numpy.array(self._training_inputs[self._training_inputs.columns[1:]])
+        y = numpy.array(self._training_outputs[self._training_outputs.columns[1:]])
+        if y.shape[1] == 1:
+            y = y.ravel()
 
-        new_inputs = numpy.dot(F, self._training_inputs)
-        new_outputs = numpy.dot(F, sk_training_output)
+        F, _ = self._compute_F(X)
 
-        self._clf.fit(new_inputs, new_outputs)
-        self._beta = self._clf.coef_
+        new_inputs = numpy.dot(F, X)
+        new_outputs = numpy.dot(F, y)
 
-        remainder = sk_training_output - np.dot(self._training_inputs, beta)
-        self._delta = self._clf.fit(self._training_inputs, remainder)
+        # print(new_inputs.shape)
+        # print(new_outputs.shape)
+
+        self._beta = self._clf.fit(new_inputs, new_outputs).coef_
+
+        remainder = y - numpy.dot(X, self._beta)
+
+        # print(y[:10])
+        # print(numpy.dot(X, self._beta)[:10])
+
+        self._delta = self._clf.fit(X, remainder).coef_
 
         self._fitted = True
 
@@ -299,13 +309,23 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
         if self.hyperparams['use_semantic_types']:
             sk_inputs = inputs.iloc[:, self._training_indices]
 
-        sk_output = numpy.dot(sk_inputs, self._beta + self._delta)
+        # print(self._training_indices)
+        # print(sk_inputs.head())
 
-        # F, F_inv = self._compute_F(sk_inputs)
+        # print((self._beta + self._delta).shape)
+        # print(self._delta)
 
-        # new_inputs = numpy.dot(F, sk_inputs)
-        # trim_output = self._clf.predict(new_inputs)
-        # sk_output = numpy.dot(F_inv, trim_output)
+        # do prediction without index column
+        sk_output = numpy.dot(sk_inputs[sk_inputs.columns[1:]], self._beta + self._delta)
+        if len(sk_output.shape) == 1:
+            sk_output = sk_output.reshape(sk_output.shape[0], 1)
+
+        # but add it back in afterwards
+        idx_col = sk_inputs[sk_inputs.columns[0]].values
+        if len(idx_col.shape) == 1:
+            idx_col = idx_col.reshape(idx_col.shape[0], 1)
+
+        sk_output = numpy.concatenate((idx_col, sk_output), axis = 1)
 
         if sparse.issparse(sk_output):
             sk_output = sk_output.toarray()
