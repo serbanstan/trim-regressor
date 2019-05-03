@@ -169,8 +169,6 @@ class TrimRegressor(SupervisedLearnerPrimitiveBase[Inputs, Outputs, Params, Hype
     
     __author__ = "ISI"
     metadata = metadata_base.PrimitiveMetadata({ 
-        # TODO: correct this
-
         "id": "de250522-5edb-4697-8945-56d04baba0e4",
         "version": "1.0.0",
         "name": "TrimRegressor",
